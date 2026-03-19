@@ -10,7 +10,7 @@ mkdir -p "$OUTPUT_DIR"
  
 echo "🚀 Extraction propre en cours..."
  
-# 1. On écrit l'en-tête (écrase le fichier existant)
+# 1. On écrit l'en-tête
 echo "Date,Nom,Temps,État,Description" > "$OUTPUT_FILE"
  
 # 2. Git log avec séparateurs spéciaux
