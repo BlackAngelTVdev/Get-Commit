@@ -1,0 +1,7 @@
+Date,Nom,Temps,État,Description
+"18/03/2026","Initial commit","[?]","[?]","Initial commit"
+"18/03/2026","Add script to extract Git logs and generate reports","[?]","[?]","Add script to extract Git logs and generate reports This script extracts Git commit logs since a specified date and formats them into a CSV file. It also converts the CSV into an XLSX file, including charts for visual representation."
+
+"19/03/2026","Update comment in get_commit.sh for clarity","[?]","[?]","Update comment in get_commit.sh for clarity Removed the note about overwriting the existing file in the header comment."
+
+"25/03/2026","Feat(Manualle): possible d'ajout a la main","[5]","[DONE]","Feat(Manualle): possible d'ajout a la main"
