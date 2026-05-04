@@ -5,17 +5,187 @@
 # - Les modifications manuelles dans le CSV sont préservées
 # - L'Excel est régénéré à partir du CSV pour cohérence
 # - Si tu as fait des mods manuelles dans l'Excel, ajoute-les aussi au CSV pour les préserver
- 
+
+set -euo pipefail
+
+AUTO_INSTALL=${AUTO_INSTALL:-1}
+
+have_cmd() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+os_name() {
+  uname -s | tr '[:upper:]' '[:lower:]'
+}
+
+install_package() {
+  local pkg="$1"
+  local os
+  os=$(os_name)
+
+  case "$os" in
+    darwin*)
+      if have_cmd brew; then
+        brew install "$pkg"
+        return $?
+      fi
+      ;;
+    linux*)
+      if have_cmd apt-get; then
+        sudo apt-get update && sudo apt-get install -y "$pkg"
+        return $?
+      elif have_cmd dnf; then
+        sudo dnf install -y "$pkg"
+        return $?
+      elif have_cmd pacman; then
+        sudo pacman -Sy --noconfirm "$pkg"
+        return $?
+      fi
+      ;;
+    msys*|mingw*|cygwin*|windowsnt*)
+      if have_cmd winget; then
+        winget install --id "$pkg" -e --silent --accept-package-agreements --accept-source-agreements
+        return $?
+      fi
+      ;;
+  esac
+
+  return 1
+}
+
+auto_install_cmd() {
+  local cmd="$1"
+  local os
+  os=$(os_name)
+
+  case "$cmd" in
+    git)
+      if [[ "$os" =~ (msys|mingw|cygwin|windowsnt) ]]; then
+        install_package "Git.Git"
+      else
+        install_package "git"
+      fi
+      ;;
+    awk)
+      if [[ "$os" =~ (msys|mingw|cygwin|windowsnt) ]]; then
+        install_package "Git.Git"
+      else
+        install_package "gawk"
+      fi
+      ;;
+    python)
+      if [[ "$os" =~ (msys|mingw|cygwin|windowsnt) ]]; then
+        install_package "Python.Python.3"
+      else
+        install_package "python3"
+      fi
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+# --- Prérequis ---
+require_cmd() {
+  if have_cmd "$1"; then
+    return 0
+  fi
+
+  if [ "$AUTO_INSTALL" = "1" ]; then
+    echo "ℹ️ Commande manquante: $1. Tentative d'installation..."
+    if auto_install_cmd "$1"; then
+      if have_cmd "$1"; then
+        echo "✅ $1 installé"
+        return 0
+      fi
+    fi
+  fi
+
+  echo "❌ Commande manquante: $1"
+  echo "   Installe-la puis relance le script."
+  exit 1
+}
+
+require_cmd git
+require_cmd awk
+
+ensure_python() {
+  PYTHON_CMD=()
+
+  if have_cmd python3; then
+    PYTHON_CMD=(python3)
+  elif have_cmd python; then
+    PYTHON_CMD=(python)
+  elif have_cmd py; then
+    PYTHON_CMD=(py -3)
+  fi
+
+  if [ ${#PYTHON_CMD[@]} -eq 0 ] && [ "$AUTO_INSTALL" = "1" ]; then
+    echo "ℹ️ Python introuvable. Tentative d'installation..."
+    auto_install_cmd python || true
+    if have_cmd python3; then
+      PYTHON_CMD=(python3)
+    elif have_cmd python; then
+      PYTHON_CMD=(python)
+    elif have_cmd py; then
+      PYTHON_CMD=(py -3)
+    fi
+  fi
+
+  if [ ${#PYTHON_CMD[@]} -eq 0 ]; then
+    echo "⚠️ Python introuvable. Le CSV sera généré, mais pas le XLSX."
+    echo "   Installe Python 3 puis relance le script."
+  fi
+}
+
+ensure_python
+
+# Installer openpyxl si possible et manquant
+ensure_pip() {
+  if "${PYTHON_CMD[@]}" -m pip --version >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if "${PYTHON_CMD[@]}" -m ensurepip --upgrade >/dev/null 2>&1; then
+    "${PYTHON_CMD[@]}" -m pip install --upgrade --user pip >/dev/null 2>&1 || true
+  fi
+
+  "${PYTHON_CMD[@]}" -m pip --version >/dev/null 2>&1
+}
+
+ensure_openpyxl() {
+  "${PYTHON_CMD[@]}" - <<'PY' >/dev/null 2>&1
+import sys
+try:
+    import openpyxl  # noqa
+except Exception:
+    sys.exit(1)
+sys.exit(0)
+PY
+
+  if [ $? -ne 0 ]; then
+    echo "ℹ️ Module python 'openpyxl' manquant. Tentative d'installation..."
+    # Essayer pip (python -m pip)
+    if ensure_pip; then
+      "${PYTHON_CMD[@]}" -m pip install --user openpyxl >/dev/null
+      echo "✅ openpyxl installé"
+    else
+      echo "⚠️ pip indisponible. Installe pip puis: pip install openpyxl"
+    fi
+  fi
+}
+
 # Config
 SINCE="2026-01-13"
 OUTPUT_DIR="Doc"
 OUTPUT_FILE="$OUTPUT_DIR/journal_de_travail.csv"
 OUTPUT_XLSX="$OUTPUT_DIR/journal_de_travail.xlsx"
- 
+
 mkdir -p "$OUTPUT_DIR"
- 
+
 echo "🚀 Extraction en mode append..."
- 
+
 # 1. Récupérer la dernière date du CSV existant
 LAST_DATE=""
 if [ -f "$OUTPUT_FILE" ]; then
@@ -33,7 +203,7 @@ else
     echo "Date,Nom,Temps,État,Description" > "$OUTPUT_FILE"
     echo "✅ Nouveau fichier CSV créé"
 fi
- 
+
 # Utiliser la dernière date comme point de départ, convertie en format ISO pour git --since
 if [ -n "$LAST_DATE" ]; then
     if [[ "$LAST_DATE" =~ ^([0-9]{2})/([0-9]{2})/([0-9]{4})$ ]]; then
@@ -48,7 +218,7 @@ if [ -n "$LAST_DATE" ]; then
 else
     SINCE="2026-01-13"
 fi
- 
+
 # 2. Git log avec séparateurs spéciaux
 # Créer une liste des (Date, Nom) existants pour éviter les doublons
 EXISTING_ENTRIES=$(awk -F',' 'NR>1 {
@@ -131,16 +301,11 @@ NF {
 echo "📄 CSV généré : $OUTPUT_FILE"
 
 # 3. Conversion automatique CSV -> XLSX
-if command -v python3 >/dev/null 2>&1; then
-    PYTHON_BIN="python3"
-elif command -v python >/dev/null 2>&1; then
-    PYTHON_BIN="python"
-else
-    PYTHON_BIN=""
-fi
+if [ ${#PYTHON_CMD[@]} -ne 0 ]; then
+    # S'assurer que openpyxl est présent (installation auto si possible)
+    ensure_openpyxl || true
 
-if [ -n "$PYTHON_BIN" ]; then
-    PY_OUTPUT=$(OUTPUT_FILE="$OUTPUT_FILE" OUTPUT_XLSX="$OUTPUT_XLSX" "$PYTHON_BIN" - << 'PYEOF' 2>&1
+    PY_OUTPUT=$(OUTPUT_FILE="$OUTPUT_FILE" OUTPUT_XLSX="$OUTPUT_XLSX" "${PYTHON_CMD[@]}" - << 'PYEOF' 2>&1
 import csv
 import os
 import re
@@ -367,7 +532,7 @@ if sorted_days:
 
     for row in ws2["F1:G1"]:
         for cell in row:
-            cell.font = Font(bold=True, color="FFFFFF")
+            cell.font = Font(bold=True)
             cell.fill = header_fill
             cell.alignment = Alignment(horizontal="center")
 
@@ -457,3 +622,10 @@ else
 fi
 
 echo "✨ C'est fini !"
+
+# Si le script est lancé en double-clic, la fenêtre peut se fermer trop vite.
+# On attend une touche uniquement si on est dans un shell interactif.
+if [ -t 0 ]; then
+  echo "Appuie sur Entrée pour fermer..."
+  read -r
+fi
