@@ -5,3 +5,6 @@ Date,Nom,Temps,État,Description
 "19/03/2026","Update comment in get_commit.sh for clarity","[?]","[?]","Update comment in get_commit.sh for clarity Removed the note about overwriting the existing file in the header comment."
 
 "25/03/2026","Feat(Manualle): possible d'ajout a la main","[5]","[DONE]","Feat(Manualle): possible d'ajout a la main"
+"25/03/2026","Fix(manual)","[?]","[?]","Fix(manual)"
+
+"04/05/2026","Update get_commit.sh","[?]","[?]","Update get_commit.sh"
