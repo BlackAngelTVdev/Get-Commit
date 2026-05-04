@@ -146,6 +146,11 @@ cd Get-Commit
 4. Push : `git push origin feature/AmazingFeature`
 5. Ouvrez une Pull Request
 
+### 🧑‍💻 Contributors
+
+Merci à toutes les personnes qui contribuent au projet.
+
+[![Contributors](https://contrib.rocks/image?repo=BlackAngelTVdev/Get-Commit)](https://github.com/BlackAngelTVdev/Get-Commit/graphs/contributors)
 ---
 
 ## 👤 Auteur
@@ -162,3 +167,4 @@ Ce projet est sous une licence **non-commerciale** (custom).
 - ❌ Tu ne peux **pas vendre / monétiser** le projet (ou un fork) sans autorisation écrite.
 
 Détails complets : voir le fichier [`LICENSE`](LICENSE).
+
