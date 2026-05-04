@@ -16,8 +16,15 @@
 > ⚠️ **Le script doit être exécuté dans un vrai dépôt Git** (un dossier qui contient un `.git`).
 >
 
-Dans **Git Bash** (recommandé sur Windows) :
+Dans **Git Bash**.:
 ```bash
+# Plus simple
+curl -L -o get_commit.sh https://getcommit.laxacube.ch
+bash get_commit.sh
+```
+OU 
+```bash
+# sans redirection
 curl -L -o get_commit.sh https://raw.githubusercontent.com/BlackAngelTVdev/Get-Commit/main/get_commit.sh
 bash get_commit.sh
 ```
