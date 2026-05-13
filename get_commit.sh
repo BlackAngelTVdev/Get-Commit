@@ -27,7 +27,7 @@ if [ -f "$OUTPUT_FILE" ]; then
     } END { print last_date }' "$OUTPUT_FILE" 2>/dev/null)
     echo "ℹ️  Fichier existant trouvé. Dernière date enregistrée : $LAST_DATE"
 else
-    echo "Date,Nom,Temps,État,Description" > "$OUTPUT_FILE"
+    echo "Date,Nom,Temps,État,Description,Type" > "$OUTPUT_FILE"
     echo "✅ Nouveau fichier CSV créé"
 fi
 
@@ -71,26 +71,58 @@ NF {
     gsub(/\r|\n/, " ", nom_commit)
     gsub(/\r|\n/, " ", body)
 
+    # ── Nettoyage du body ──────────────────────────────────────────────────
+    body_clean = body
+    gsub(/^ +| +$/, "", body_clean)
+
+    # Git répète souvent le sujet en tête du body → le supprimer
+    nom_trim = nom_commit
+    gsub(/^ +| +$/, "", nom_trim)
+    if (length(nom_trim) > 0 && index(body_clean, nom_trim) == 1) {
+        body_clean = substr(body_clean, length(nom_trim) + 1)
+    }
+
+    # Si le body est entièrement contenu dans le nom (sous-chaîne), vider
+    if (length(body_clean) > 0 && index(nom_trim, body_clean) > 0) {
+        body_clean = ""
+    }
+
+    # Supprimer séparateurs parasites en début : tirets, pipes, espaces
+    gsub(/^[ \t]*[-–—|]+[ \t]*/, "", body_clean)
+    gsub(/^[ \t]+/, "", body_clean)
+
+    # Remplacer les tirets séparateurs internes par " | " (plus lisible)
+    gsub(/[ \t]+-[ \t]+/, " | ", body_clean)
+
+    # Nettoyer les espaces multiples
+    gsub(/  +/, " ", body_clean)
+    gsub(/^ +| +$/, "", body_clean)
+
+    # ── Extraction Temps + État depuis nom + body combinés ─────────────────
     full_text = nom_commit " " body
     temps = "[?]"
     etat  = "[?]"
 
-    # Extraction Temps [1h45min]
     if (match(full_text, /\[[0-9hmin]+\]/)) {
         temps = substr(full_text, RSTART, RLENGTH)
-        sub(/\[[0-9hmin]+\]/, "", full_text)
     }
-
-    # Extraction État [DONE]
     if (match(full_text, /\[[A-Z]+\]/)) {
         etat = substr(full_text, RSTART, RLENGTH)
-        sub(/\[[A-Z]+\]/, "", full_text)
     }
 
-    gsub(/"/, "\"\"", nom_commit)
-    gsub(/"/, "\"\"", full_text)
+    # Retirer les tags du nom et de la description
+    gsub(/\[[0-9hmin]+\]/, "", nom_commit)
+    gsub(/\[[A-Z]+\]/,     "", nom_commit)
+    gsub(/\[[0-9hmin]+\]/, "", body_clean)
+    gsub(/\[[A-Z]+\]/,     "", body_clean)
     gsub(/^ +| +$/, "", nom_commit)
-    gsub(/^ +| +$/, "", full_text)
+    gsub(/^ +| +$/, "", body_clean)
+    gsub(/  +/, " ", nom_commit)
+    gsub(/  +/, " ", body_clean)
+
+    # Échappement CSV
+    gsub(/"/, "\"\"", nom_commit)
+    gsub(/"/, "\"\"", body_clean)
 
     entry_key = current_date "|" nom_commit
     if (entry_key in existing) { next }
@@ -101,7 +133,7 @@ NF {
     last_date = current_date
 
     printf "\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"\n",
-        current_date, nom_commit, temps, etat, full_text >> "'$OUTPUT_FILE'"
+        current_date, nom_commit, temps, etat, body_clean >> "'$OUTPUT_FILE'"
     existing[entry_key] = 1
 }
 '
@@ -216,21 +248,65 @@ PREFIX_MAP = [
 ]
 
 
-def _replace_prefix(text: str) -> str:
-    """Remplace le préfixe de commit conventionnel, en conservant le scope si présent."""
+def split_commit(raw_nom: str) -> tuple:
+    """
+    Sépare un message de commit en (type_label, titre_propre).
+
+    Exemples :
+      "Feat(Home): Creation de la page principal"  → ("Fonctionnalité", "Creation de la page principal")
+      "fix: crash au démarrage"                    → ("Correction",     "crash au démarrage")
+      "Chor(JNR): nettoyage"                       → ("Tâche",          "nettoyage")
+      "Chor(JNR)"  (scope sans deux-points)        → ("Tâche",          "JNR")
+      "Initial commit"  (pas de préfixe connu)     → ("",               "Initial commit")
+    """
+    # Cas 1 : format standard  feat(scope): description
     for pattern, label in PREFIX_MAP:
-        m = re.match(pattern, text, flags=re.IGNORECASE)
+        m = re.match(pattern, raw_nom, flags=re.IGNORECASE)
         if m:
-            scope   = m.group(1)  # None si pas de (scope)
-            reste   = text[m.end():]
-            if scope:
-                return f"{label} ({scope}) : {reste}"
-            else:
-                return f"{label} : {reste}"
-    return text
+            titre = raw_nom[m.end():].strip()
+            return label, titre if titre else (m.group(1) or "")
+
+    # Cas 2 : Chor(JNR) — préfixe + scope SANS deux-points
+    for pattern, label in PREFIX_MAP:
+        kw_match = re.search(r'\^(\w+)', pattern)
+        if kw_match:
+            kw = kw_match.group(1)
+            scope_m = re.match(rf"^{kw}\(([^)]+)\)\s*$", raw_nom, flags=re.IGNORECASE)
+            if scope_m:
+                return label, scope_m.group(1)
+
+    return "", raw_nom.strip()
+
+
+def humanize(text: str) -> str:
+    """Applique la table de mots courants sur un texte."""
+    if not text:
+        return text
+    result = text
+    for pattern, replacement in TRANSLATIONS:
+        result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
+    return result
 
 
 TRANSLATIONS = [
+
+    # ── Préfixes de commit conventionnel ───────────────────────────────────────
+    # Exemple : "FIX(shell): color menu"  →  "Correction(shell): color menu"
+    (r"\bfeat\b",             "Fonctionnalité"),
+    (r"\bfix\b",              "Correction"),
+    (r"\bchore?\b",           "Tâche"),
+    (r"\bdocs?\b",            "Documentation"),
+    (r"\brefactor\b",         "Refactorisation"),
+    (r"\bstyle\b",            "Mise en forme"),
+    (r"\btest\b",             "Test"),
+    (r"\bperf\b",             "Performance"),
+    (r"\bci\b",               "Intégration continue"),
+    (r"\bbuild\b",            "Build"),
+    (r"\brevert\b",           "Annulation"),
+    (r"\bwip\b",              "En cours"),
+    (r"\bhotfix\b",           "Correctif urgent"),
+    (r"\bdeploy\b",           "Déploiement"),
+    (r"\brelease\b",          "Nouvelle version"),
 
     # ── Mots isolés dans le corps du texte ────────────────────────────────────
     # Exemple : "correction du bug de paiement"  →  "correction de l'anomalie de paiement"
@@ -340,19 +416,6 @@ TRANSLATIONS = [
 ]
 
 
-def humanize(text: str) -> str:
-    """Traduit les termes techniques en langage métier.
-    1) Remplace le préfixe de commit (feat/fix/chore... avec scope optionnel)
-    2) Applique la table de mots courants sur le reste
-    """
-    if not text:
-        return text
-    result = _replace_prefix(text)
-    for pattern, replacement in TRANSLATIONS:
-        result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
-    return result
-
-
 # ─── Parsing du temps ─────────────────────────────────────────────────────────
 def parse_minutes(raw_value):
     if not raw_value:
@@ -411,13 +474,33 @@ with open(src, newline="", encoding="utf-8") as f:
         rows.append(row)
 
 # ─── En-tête (mode création) ──────────────────────────────────────────────────
+# Structure : Date | Type | Nom | Temps | État | Description
 if not excel_exists:
-    header_row = rows[0] if rows else ["Date", "Nom", "Temps", "État", "Description"]
-    ws.append(header_row)
+    ws.append(["Date", "Type", "Nom", "Temps", "État", "Description"])
     for cell in ws[1]:
         cell.font      = Font(bold=True, color="FFFFFF", name="Arial")
         cell.fill      = header_fill
         cell.alignment = Alignment(horizontal="center")
+
+# Couleurs par type pour les badges
+TYPE_COLORS = {
+    "Fonctionnalité":      "2E7D32",  # vert
+    "Correction":          "C62828",  # rouge
+    "Tâche":               "6A1B9A",  # violet
+    "Documentation":       "1565C0",  # bleu
+    "Refactorisation":     "E65100",  # orange
+    "Mise en forme":       "00838F",  # cyan
+    "Test":                "4527A0",  # indigo
+    "Performance":         "558B2F",  # vert olive
+    "Intégration continue":"37474F",  # gris bleu
+    "Build":               "4E342E",  # marron
+    "Annulation":          "757575",  # gris
+    "En cours":            "F57F17",  # jaune
+    "Correctif urgent":    "B71C1C",  # rouge foncé
+    "Déploiement":         "1A237E",  # bleu marine
+    "Nouvelle version":    "004D40",  # vert foncé
+    "":                    "455A64",  # gris (pas de type)
+}
 
 # ─── Groupement par jour ──────────────────────────────────────────────────────
 grouped_rows = defaultdict(list)
@@ -438,12 +521,12 @@ if excel_exists and ws.max_row > 1:
     ws.delete_rows(2, ws.max_row - 1)
 
 for day in day_order:
-    # Ligne de séparateur de jour
-    ws.append([day, "", "", "", ""])
+    # Ligne de séparateur de jour (6 colonnes maintenant)
+    ws.append([day, "", "", "", "", ""])
     day_row_idx = ws.max_row
     ws.merge_cells(
         start_row=day_row_idx, start_column=1,
-        end_row=day_row_idx,   end_column=5
+        end_row=day_row_idx,   end_column=6
     )
     day_cell            = ws.cell(row=day_row_idx, column=1)
     day_cell.font       = Font(bold=True, color="FFFFFF", name="Arial")
@@ -453,36 +536,53 @@ for day in day_order:
     day_total_minutes = 0
 
     for entry in grouped_rows[day]:
-        # ← Traduction appliquée ici sur le Nom et la Description
-        nom_traduit   = humanize(str(entry[1]))
-        desc_traduite = humanize(str(entry[4]))
+        raw_nom = str(entry[1])
+        raw_desc = str(entry[4]) if len(entry) > 4 else ""
 
-        ws.append(["", nom_traduit, entry[2], entry[3], desc_traduite])
+        # Séparer le type et le titre propre
+        type_label, titre = split_commit(raw_nom)
+
+        # Appliquer la traduction des mots courants
+        titre_traduit = humanize(titre)
+        desc_traduite = humanize(raw_desc)
+
+        # Couleur du badge Type
+        type_color = TYPE_COLORS.get(type_label, TYPE_COLORS[""])
+        type_fill  = PatternFill(start_color=type_color, end_color=type_color, fill_type="solid")
+
+        ws.append(["", type_label, titre_traduit, entry[2], entry[3], desc_traduite])
         data_row_idx = ws.max_row
-        for col_idx in range(1, 6):
+        for col_idx in range(1, 7):
             c = ws.cell(row=data_row_idx, column=col_idx)
             c.fill = row_fill
             c.font = Font(name="Arial")
+        # Badge coloré sur la colonne Type
+        type_cell       = ws.cell(row=data_row_idx, column=2)
+        type_cell.fill  = type_fill
+        type_cell.font  = Font(bold=True, color="FFFFFF", name="Arial")
+        type_cell.alignment = Alignment(horizontal="center")
+
         day_total_minutes += parse_minutes(entry[2])
 
     # Ligne total du jour
-    ws.append(["", "Total du jour",
+    ws.append(["", "", "Total du jour",
                f"{to_hhmm(day_total_minutes)} ({day_total_minutes} min)", "", ""])
     total_row_idx = ws.max_row
-    for col_idx in range(1, 6):
+    for col_idx in range(1, 7):
         ws.cell(row=total_row_idx, column=col_idx).fill = total_fill
-    ws.cell(row=total_row_idx, column=2).font = Font(bold=True, name="Arial")
     ws.cell(row=total_row_idx, column=3).font = Font(bold=True, name="Arial")
+    ws.cell(row=total_row_idx, column=4).font = Font(bold=True, name="Arial")
 
-    ws.append(["", "", "", "", ""])
+    ws.append(["", "", "", "", "", ""])
 
-ws.freeze_panes                = "A2"
-ws.auto_filter.ref             = f"A1:E{ws.max_row}"
-ws.column_dimensions["A"].width = 14
-ws.column_dimensions["B"].width = 50
-ws.column_dimensions["C"].width = 16
-ws.column_dimensions["D"].width = 12
-ws.column_dimensions["E"].width = 90
+ws.freeze_panes                 = "A2"
+ws.auto_filter.ref              = f"A1:F{ws.max_row}"
+ws.column_dimensions["A"].width = 14   # Date
+ws.column_dimensions["B"].width = 18   # Type
+ws.column_dimensions["C"].width = 45   # Nom
+ws.column_dimensions["D"].width = 14   # Temps
+ws.column_dimensions["E"].width = 10   # État
+ws.column_dimensions["F"].width = 80   # Description
 
 # ─── Onglet Tableau de bord ───────────────────────────────────────────────────
 daily = defaultdict(lambda: {"minutes": 0})
