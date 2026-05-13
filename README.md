@@ -19,14 +19,14 @@
 Dans **Git Bash** :
 ```bash
 # Plus simple
-curl -L -o get_commit.sh https://getcommit.laxacube.ch
-bash get_commit.sh
+curl -L -o main_commit.sh https://getcommit.laxacube.ch
+bash main_commit.sh
 ```
 OU
 ```bash
 # sans redirection
-curl -L -o get_commit.sh https://raw.githubusercontent.com/BlackAngelTVdev/Get-Commit/main/get_commit.sh
-bash get_commit.sh
+curl -L -o get_commit.sh https://raw.githubusercontent.com/BlackAngelTVdev/Get-Commit/main/main_commit.sh
+bash main_commit.sh
 ```
 
 Les fichiers générés/mis à jour seront créés dans `./Doc/` du dépôt courant :
