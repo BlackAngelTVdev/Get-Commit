@@ -66,7 +66,7 @@ NF {
     nom_commit   = $2
     body         = $3
 
-    gsub(/\r|\n/, "",  current_date)
+    gsub(/\r|\n/, "",   current_date)
     gsub(/^ +| +$/, "", current_date)
     gsub(/\r|\n/, " ", nom_commit)
     gsub(/\r|\n/, " ", body)
@@ -172,37 +172,8 @@ except Exception:
 
 # ──────────────────────────────────────────────────────────────────────────────
 # TABLE DE CORRESPONDANCE : termes techniques → termes métier
-#
-# Formats reconnus pour chaque préfixe (toutes ces variantes sont capturées) :
-#   feat:           feat!:          feat(auth):       feat(auth)!:
-#   FEAT:           Feat(login):    feat(ui/modal):   feat(scope)!:
-#
-# Exemples complets :
-#   "feat: ajout login"                   → "Fonctionnalité : ajout connexion"
-#   "feat(auth): ajout token JWT"         → "Fonctionnalité (auth) : ajout jeton d'authentification JWT"
-#   "feat(auth)!: refonte login"          → "Fonctionnalité (auth) : refonte connexion"
-#   "fix: crash au démarrage"             → "Correction : crash au démarrage"
-#   "fix(paiement): bug montant"          → "Correction (paiement) : anomalie montant"
-#   "chore: nettoyage logs"               → "Tâche : nettoyage journal"
-#   "chore(ci): update pipeline"          → "Tâche (ci) : mise à jour chaîne de traitement"
-#   "doc: guide installation"             → "Documentation : guide installation"
-#   "docs: mise à jour README"            → "Documentation : mise à jour lisez-moi"
-#   "docs(api): endpoints paiement"       → "Documentation (api) : endpoints paiement"
-#   "refactor(auth): réécriture module"   → "Refactorisation (auth) : réécriture module"
-#   "style(form): indentation CSS"        → "Mise en forme (form) : indentation CSS"
-#   "test(paiement): ajout mock"          → "Test (paiement) : ajout simulation"
-#   "perf(db): cache requêtes"            → "Performance (db) : cache requêtes"
-#   "ci(github): ajout step lint"         → "Intégration continue (github) : ajout step lint"
-#   "build(webpack): upgrade v5"          → "Build (webpack) : mise à niveau v5"
-#   "revert: annulation merge"            → "Annulation : fusion"
-#   "wip(router): refacto en cours"       → "En cours (router) : refacto en cours"
-#   "hotfix(auth): token expiré"          → "Correctif urgent (auth) : jeton d'authentification expiré"
-#   "deploy(prod): release v2.3"          → "Déploiement (prod) : version publiée v2.3"
-#   "release(v1.2.0): changelog"          → "Nouvelle version (v1.2.0) : journal des modifications"
 # ──────────────────────────────────────────────────────────────────────────────
 
-# Regex générique : préfixe optionnellement suivi de (scope) et/ou ! puis :
-# Groupe 1 = scope entre parenthèses (sans les parenthèses), ou None
 _SCOPE = r"(?:\(([^)]*)\))?"   # capture optionnelle du scope
 _BANG  = r"[!]?"               # breaking change optionnel
 _SEP   = r":\s*"               # deux-points + espaces
@@ -215,58 +186,31 @@ def _prefix_re(keyword: str) -> str:
 
 # Table des préfixes → label métier
 PREFIX_MAP = [
-    # Exemple : "feat(auth): ajout login"   → "Fonctionnalité (auth) : ajout connexion"
     (_prefix_re(r"feat"),     "Fonctionnalité"),
-    # Exemple : "fix(paiement): bug montant" → "Correction (paiement) : anomalie montant"
     (_prefix_re(r"fix"),      "Correction"),
-    # Exemple : "chore(ci): update deps"    → "Tâche (ci) : mise à jour dépendances"
     (_prefix_re(r"chore?"),   "Tâche"),
-    # Exemple : "doc: guide"  ou  "docs(api): endpoints"  → "Documentation ..."
     (_prefix_re(r"docs?"),    "Documentation"),
-    # Exemple : "refactor(auth): réécriture" → "Refactorisation (auth) : réécriture"
     (_prefix_re(r"refactor"), "Refactorisation"),
-    # Exemple : "style(form): indentation"  → "Mise en forme (form) : indentation"
     (_prefix_re(r"style"),    "Mise en forme"),
-    # Exemple : "test(paie): ajout mock"    → "Test (paie) : ajout simulation"
     (_prefix_re(r"test"),     "Test"),
-    # Exemple : "perf(db): cache"           → "Performance (db) : cache"
     (_prefix_re(r"perf"),     "Performance"),
-    # Exemple : "ci(github): lint"          → "Intégration continue (github) : lint"
     (_prefix_re(r"ci"),       "Intégration continue"),
-    # Exemple : "build(webpack): upgrade"   → "Build (webpack) : mise à niveau"
     (_prefix_re(r"build"),    "Build"),
-    # Exemple : "revert: annulation merge"  → "Annulation : fusion"
     (_prefix_re(r"revert"),   "Annulation"),
-    # Exemple : "wip(router): refacto"      → "En cours (router) : refacto"
     (_prefix_re(r"wip"),      "En cours"),
-    # Exemple : "hotfix(auth): token"       → "Correctif urgent (auth) : jeton d'authentification"
     (_prefix_re(r"hotfix"),   "Correctif urgent"),
-    # Exemple : "deploy(prod): v2.3"        → "Déploiement (prod) : v2.3"
     (_prefix_re(r"deploy"),   "Déploiement"),
-    # Exemple : "release(v1.2): changelog"  → "Nouvelle version (v1.2) : journal des modifications"
     (_prefix_re(r"release"),  "Nouvelle version"),
 ]
 
 
 def split_commit(raw_nom: str) -> tuple:
-    """
-    Sépare un message de commit en (type_label, titre_propre).
-
-    Exemples :
-      "Feat(Home): Creation de la page principal"  → ("Fonctionnalité", "Creation de la page principal")
-      "fix: crash au démarrage"                    → ("Correction",     "crash au démarrage")
-      "Chor(JNR): nettoyage"                       → ("Tâche",          "nettoyage")
-      "Chor(JNR)"  (scope sans deux-points)        → ("Tâche",          "JNR")
-      "Initial commit"  (pas de préfixe connu)     → ("",               "Initial commit")
-    """
-    # Cas 1 : format standard  feat(scope): description
     for pattern, label in PREFIX_MAP:
         m = re.match(pattern, raw_nom, flags=re.IGNORECASE)
         if m:
             titre = raw_nom[m.end():].strip()
             return label, titre if titre else (m.group(1) or "")
 
-    # Cas 2 : Chor(JNR) — préfixe + scope SANS deux-points
     for pattern, label in PREFIX_MAP:
         kw_match = re.search(r'\^(\w+)', pattern)
         if kw_match:
@@ -279,7 +223,6 @@ def split_commit(raw_nom: str) -> tuple:
 
 
 def humanize(text: str) -> str:
-    """Applique la table de mots courants sur un texte."""
     if not text:
         return text
     result = text
@@ -289,9 +232,6 @@ def humanize(text: str) -> str:
 
 
 TRANSLATIONS = [
-
-    # ── Préfixes de commit conventionnel ───────────────────────────────────────
-    # Exemple : "FIX(shell): color menu"  →  "Correction(shell): color menu"
     (r"\bfeat\b",             "Fonctionnalité"),
     (r"\bfix\b",              "Correction"),
     (r"\bchore?\b",           "Tâche"),
@@ -307,111 +247,57 @@ TRANSLATIONS = [
     (r"\bhotfix\b",           "Correctif urgent"),
     (r"\bdeploy\b",           "Déploiement"),
     (r"\brelease\b",          "Nouvelle version"),
-
-    # ── Mots isolés dans le corps du texte ────────────────────────────────────
-    # Exemple : "correction du bug de paiement"  →  "correction de l'anomalie de paiement"
     (r"\bbug\b",              "anomalie"),
-    # Exemple : "hotfix sur le token"  →  "correctif urgent sur le jeton d'authentification"
     (r"\bhotfix\b",           "correctif urgent"),
-    # Exemple : "merge de la branche feature"  →  "fusion de la branche fonctionnalité"
     (r"\bmerge\b",            "fusion"),
-    # Exemple : "création d'une nouvelle branch"  →  "création d'une nouvelle branche"
     (r"\bbranch\b",           "branche"),
-    # Exemple : "rollback suite à l'erreur"  →  "retour arrière suite à l'erreur"
     (r"\brollback\b",         "retour arrière"),
-    # Exemple : "nouveau deploy en production"  →  "nouveau déploiement en production"
     (r"\bdeploy(?:ment)?\b",  "déploiement"),
-    # Exemple : "la pipeline CI a échoué"  →  "la chaîne de traitement CI a échoué"
     (r"\bpipeline\b",         "chaîne de traitement"),
-    # Exemple : "revue de la release v2"  →  "revue de la version publiée v2"
     (r"\brelease\b",          "version publiée"),
-    # Exemple : "mise à jour du readme"  →  "mise à jour du lisez-moi"
     (r"\breadme\b",           "lisez-moi"),
-    # Exemple : "mise à jour du changelog"  →  "mise à jour du journal des modifications"
     (r"\bchangelog\b",        "journal des modifications"),
-    # Exemple : "modification de la config"  →  "modification de la configuration"
     (r"\bconfig\b",           "configuration"),
-    # Exemple : "ajout variable d'env"  →  "ajout variable d'environnement"
     (r"\benv\b",              "environnement"),
-    # Exemple : "script de setup"  →  "script de mise en place"
     (r"\bsetup\b",            "mise en place"),
-    # Exemple : "install des dépendances"  →  "installation des dépendances"
     (r"\binstall\b",          "installation"),
-    # Exemple : "update librairie axios"  →  "mise à jour librairie axios"
     (r"\bupdate\b",           "mise à jour"),
-    # Exemple : "upgrade node 18→20"  →  "mise à niveau node 18→20"
     (r"\bupgrade\b",          "mise à niveau"),
-    # Exemple : "amélioration backend API"  →  "amélioration serveur interface"
     (r"\bbackend\b",          "serveur"),
-    # Exemple : "correction frontend"  →  "correction interface utilisateur"
     (r"\bfrontend\b",         "interface utilisateur"),
-    # Exemple : "nouveau composant UI"  →  "nouveau composant interface"
     (r"\bui\b",               "interface"),
-    # Exemple : "amélioration UX formulaire"  →  "amélioration expérience utilisateur formulaire"
     (r"\bux\b",               "expérience utilisateur"),
-    # Exemple : "optimisation requête DB"  →  "optimisation requête base de données"
     (r"\b(?:db|database)\b",  "base de données"),
-    # Exemple : "lenteur sur la query"  →  "lenteur sur la requête"
     (r"\bquery\b",            "requête"),
-    # Exemple : "invalidation du cache"  →  "invalidation du cache"),
     (r"\bcache\b",            "cache"),
-    # Exemple : "refresh du token expiré"  →  "refresh du jeton d'authentification expiré"
     (r"\btoken\b",            "jeton d'authentification"),
-    # Exemple : "module auth incomplet"  →  "module authentification incomplet"
     (r"\bauth\b",             "authentification"),
-    # Exemple : "page de login"  →  "page de connexion"
     (r"\blogin\b",            "connexion"),
-    # Exemple : "bouton logout manquant"  →  "bouton déconnexion manquant"
     (r"\blogout\b",           "déconnexion"),
-    # Exemple : "reset password oublié"  →  "reset mot de passe oublié"
     (r"\bpassword\b",         "mot de passe"),
-    # Exemple : "ouverture d'une modal"  →  "ouverture d'une fenêtre modale"
     (r"\bmodal\b",            "fenêtre modale"),
-    # Exemple : "nouveau button valider"  →  "nouveau bouton valider"
     (r"\bbutton\b",           "bouton"),
-    # Exemple : "validation du form"  →  "validation du formulaire"
     (r"\bform\b",             "formulaire"),
-    # Exemple : "champ input vide"  →  "champ de saisie vide"
     (r"\binput\b",            "champ de saisie"),
-    # Exemple : "fix router broken"  →  "correction routeur broken"
     (r"\brouter\b",           "routeur"),
-    # Exemple : "nouveau component DatePicker"  →  "nouveau composant DatePicker"
     (r"\bcomponent\b",        "composant"),
-    # Exemple : "extraction dans un module"  →  "extraction dans un module"
     (r"\bmodule\b",           "module"),
-    # Exemple : "appel au service externe"  →  "appel au service externe"
     (r"\bservice\b",          "service"),
-    # Exemple : "erreur dans le controller"  →  "erreur dans le contrôleur"
     (r"\bcontroller\b",       "contrôleur"),
-    # Exemple : "update du schema Prisma"  →  "update du schéma Prisma"
     (r"\bschema\b",           "schéma"),
-    # Exemple : "nouvelle migration SQL"  →  "nouvelle migration SQL"
     (r"\bmigration\b",        "migration"),
-    # Exemple : "ajout seed pour les tests"  →  "ajout données initiales pour les tests"
     (r"\bseed\b",             "données initiales"),
-    # Exemple : "mock du service mail"  →  "simulation du service mail"
     (r"\bmock\b",             "simulation"),
-    # Exemple : "stub API externe"  →  "bouchon API externe"
     (r"\bstub\b",             "bouchon"),
-    # Exemple : "vérification des logs"  →  "vérification du journal"
     (r"\blogs?\b",            "journal"),
-    # Exemple : "erreur 500 non capturée"  →  "erreur 500 non capturée"
     (r"\berror\b",            "erreur"),
-    # Exemple : "warning deprecation"  →  "avertissement deprecation"
     (r"\bwarning\b",          "avertissement"),
-    # Exemple : "timeout sur l'appel API"  →  "délai dépassé sur l'appel API"
     (r"\btimeout\b",          "délai dépassé"),
-    # Exemple : "logique de retry"  →  "logique de nouvelle tentative"
     (r"\bretry\b",            "nouvelle tentative"),
-    # Exemple : "ajout d'un tag v2.0"  →  "ajout d'une étiquette v2.0"
     (r"\btag\b",              "étiquette"),
-    # Exemple : "refacto du script bash"  →  "refacto du script bash"
     (r"\bscript\b",           "script"),
-    # Exemple : "appel API paiement"  →  "appel interface paiement"
     (r"\bapi\b",              "interface"),
-    # Exemple : "test de régression complet"  →  "test de régression complet"
     (r"\bregression\b",       "régression"),
-    # Exemple : "modèle User mis à jour"  →  "modèle utilisateur mis à jour"
     (r"\bmodel\b",            "modèle"),
 ]
 
@@ -473,33 +359,35 @@ with open(src, newline="", encoding="utf-8") as f:
             continue
         rows.append(row)
 
-# ─── En-tête (mode création) ──────────────────────────────────────────────────
-# Structure : Date | Type | Nom | Temps | État | Description
+# ─── En-tête (Structure stricte à 5 colonnes avec Description en C) ───────────
 if not excel_exists:
-    ws.append(["Date", "Type", "Nom", "Temps", "État", "Description"])
+    ws.append(["Date", "Type", "Description", "Temps", "État"])
     for cell in ws[1]:
         cell.font      = Font(bold=True, color="FFFFFF", name="Arial")
         cell.fill      = header_fill
         cell.alignment = Alignment(horizontal="center")
+else:
+    # Si le fichier existe déjà, on s'assure que la colonne C s'appelle "Description"
+    ws.cell(row=1, column=3).value = "Description"
 
 # Couleurs par type pour les badges
 TYPE_COLORS = {
-    "Fonctionnalité":      "2E7D32",  # vert
-    "Correction":          "C62828",  # rouge
-    "Tâche":               "6A1B9A",  # violet
-    "Documentation":       "1565C0",  # bleu
-    "Refactorisation":     "E65100",  # orange
-    "Mise en forme":       "00838F",  # cyan
-    "Test":                "4527A0",  # indigo
-    "Performance":         "558B2F",  # vert olive
-    "Intégration continue":"37474F",  # gris bleu
-    "Build":               "4E342E",  # marron
-    "Annulation":          "757575",  # gris
-    "En cours":            "F57F17",  # jaune
-    "Correctif urgent":    "B71C1C",  # rouge foncé
-    "Déploiement":         "1A237E",  # bleu marine
-    "Nouvelle version":    "004D40",  # vert foncé
-    "":                    "455A64",  # gris (pas de type)
+    "Fonctionnalité":      "2E7D32",
+    "Correction":          "C62828",
+    "Tâche":               "6A1B9A",
+    "Documentation":       "1565C0",
+    "Refactorisation":     "E65100",
+    "Mise en forme":       "00838F",
+    "Test":                "4527A0",
+    "Performance":         "558B2F",
+    "Intégration continue":"37474F",
+    "Build":               "4E342E",
+    "Annulation":          "757575",
+    "En cours":            "F57F17",
+    "Correctif urgent":    "B71C1C",
+    "Déploiement":         "1A237E",
+    "Nouvelle version":    "004D40",
+    "":                    "455A64",
 }
 
 # ─── Groupement par jour ──────────────────────────────────────────────────────
@@ -520,13 +408,17 @@ for row in rows[1:]:
 if excel_exists and ws.max_row > 1:
     ws.delete_rows(2, ws.max_row - 1)
 
+# Supprime l'ancienne colonne F résiduelle (6ème colonne) des en-têtes du modèle
+if ws.max_column >= 6:
+    ws.delete_cols(6)
+
 for day in day_order:
-    # Ligne de séparateur de jour (6 colonnes maintenant)
-    ws.append([day, "", "", "", "", ""])
+    # Ligne de séparateur de jour (5 colonnes au total)
+    ws.append([day, "", "", "", ""])
     day_row_idx = ws.max_row
     ws.merge_cells(
         start_row=day_row_idx, start_column=1,
-        end_row=day_row_idx,   end_column=6
+        end_row=day_row_idx,   end_column=5
     )
     day_cell            = ws.cell(row=day_row_idx, column=1)
     day_cell.font       = Font(bold=True, color="FFFFFF", name="Arial")
@@ -539,50 +431,51 @@ for day in day_order:
         raw_nom = str(entry[1])
         raw_desc = str(entry[4]) if len(entry) > 4 else ""
 
-        # Séparer le type et le titre propre
         type_label, titre = split_commit(raw_nom)
+        desc_finale = raw_desc if raw_desc.strip() else titre
+        desc_traduite = humanize(desc_finale)
 
-        # Appliquer la traduction des mots courants
-        titre_traduit = humanize(titre)
-        desc_traduite = humanize(raw_desc)
+        temps_valeur = entry[2]
+        etat_valeur  = entry[3]
 
-        # Couleur du badge Type
         type_color = TYPE_COLORS.get(type_label, TYPE_COLORS[""])
         type_fill  = PatternFill(start_color=type_color, end_color=type_color, fill_type="solid")
 
-        ws.append(["", type_label, titre_traduit, entry[2], entry[3], desc_traduite])
+        # Insertion des données sur 5 colonnes (C = Description)
+        ws.append(["", type_label, desc_traduite, temps_valeur, etat_valeur])
+        
         data_row_idx = ws.max_row
-        for col_idx in range(1, 7):
+        for col_idx in range(1, 6):
             c = ws.cell(row=data_row_idx, column=col_idx)
             c.fill = row_fill
             c.font = Font(name="Arial")
-        # Badge coloré sur la colonne Type
+            
         type_cell       = ws.cell(row=data_row_idx, column=2)
         type_cell.fill  = type_fill
         type_cell.font  = Font(bold=True, color="FFFFFF", name="Arial")
         type_cell.alignment = Alignment(horizontal="center")
 
-        day_total_minutes += parse_minutes(entry[2])
+        day_total_minutes += parse_minutes(temps_valeur)
 
-    # Ligne total du jour
-    ws.append(["", "", "Total du jour",
-               f"{to_hhmm(day_total_minutes)} ({day_total_minutes} min)", "", ""])
+    # Ligne total du jour (5 colonnes)
+    ws.append(["", "", "Total du jour", f"{to_hhmm(day_total_minutes)} ({day_total_minutes} min)", ""])
     total_row_idx = ws.max_row
-    for col_idx in range(1, 7):
+    for col_idx in range(1, 6):
         ws.cell(row=total_row_idx, column=col_idx).fill = total_fill
     ws.cell(row=total_row_idx, column=3).font = Font(bold=True, name="Arial")
     ws.cell(row=total_row_idx, column=4).font = Font(bold=True, name="Arial")
 
-    ws.append(["", "", "", "", "", ""])
+    ws.append(["", "", "", "", ""])
 
 ws.freeze_panes                 = "A2"
-ws.auto_filter.ref              = f"A1:F{ws.max_row}"
+ws.auto_filter.ref              = f"A1:E{ws.max_row}"
+
+# Redimensionnement propre des 5 colonnes
 ws.column_dimensions["A"].width = 14   # Date
 ws.column_dimensions["B"].width = 18   # Type
-ws.column_dimensions["C"].width = 45   # Nom
-ws.column_dimensions["D"].width = 14   # Temps
-ws.column_dimensions["E"].width = 10   # État
-ws.column_dimensions["F"].width = 80   # Description
+ws.column_dimensions["C"].width = 75   # Description
+ws.column_dimensions["D"].width = 16   # Temps
+ws.column_dimensions["E"].width = 12   # État
 
 # ─── Onglet Tableau de bord ───────────────────────────────────────────────────
 daily = defaultdict(lambda: {"minutes": 0})
