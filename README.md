@@ -18,14 +18,7 @@
 
 Dans **Git Bash** :
 ```bash
-# Plus simple
-curl -L -o main_commit.sh https://getcommit.laxacube.ch
-bash main_commit.sh
-```
-OU
-```bash
-# sans redirection
-curl -L -o get_commit.sh https://raw.githubusercontent.com/BlackAngelTVdev/Get-Commit/main/main_commit.sh
+curl -L -o main_commit.sh https://raw.githubusercontent.com/BlackAngelTVdev/Get-Commit/main/main_commit.sh
 bash main_commit.sh
 ```
 
@@ -38,7 +31,9 @@ Les fichiers générés/mis à jour seront créés dans `./Doc/` du dépôt cour
 ## 🧐 Aperçu
 Ce projet contient un script `get_commit.sh` qui :
 - lit l'historique `git log` de ton dépôt,
-- extrait **Date / Titre / Description**,
+- extrait **Date / Auteur / Commit / Type / Description / Temps / État / Fichiers**,
+- **indique qui a fait quoi** (nom de l'auteur du commit, visible dans le CSV et l'Excel),
+- **référence chaque commit** (hash court) avec les **fichiers et répertoires** concernés,
 - détecte des tags dans tes commits comme **temps** (`[1h45min]`) et **état** (`[DONE]`),
 - écrit tout ça dans un **CSV** (mode *append*, sans écraser tes modifications),
 - et (si Python est installé) génère un **Excel** mis en forme avec un onglet *Tableau de bord*,
@@ -52,20 +47,62 @@ Ce projet contient un script `get_commit.sh` qui :
 - ✅ **Mode APPEND (ajout, pas remplacement)** :
   - le CSV n'est **pas recréé** ; seules les nouvelles entrées sont ajoutées
   - tes modifications manuelles dans le CSV sont préservées
-- ✅ **Détection anti-doublons** : évite de réécrire une ligne déjà présente (clé : `Date|Nom`).
+- ✅ **Détection anti-doublons** : évite de réécrire un commit déjà présent (clé : hash du commit).
 - ✅ **Extraction automatique depuis tes commits** :
   - `Date` : issue de `git log` (format `dd/mm/yyyy`)
-  - `Nom` : sujet du commit
-  - `Description` : sujet + body nettoyé
+  - `Auteur` : auteur du commit (`%an`, normalisé par `.mailmap` si présent)
+  - `Commit` : hash court (8 caractères) → le commit est référencé
+  - `Fichiers` : fichiers / répertoires touchés par le commit
+  - `Type` : libellé métier du préfixe (`feat` → *Fonctionnalité*…, scope conservé)
+  - `Description` : sujet nettoyé + corps du message
 - ✅ **Parsing des tags dans les messages de commit** :
-  - **Temps** : `[1h]`, `[1h30]`, `[45min]`, etc.
+  - **Temps** : `[1h]`, `[1h30]`, `[45min]`, `[50]`, etc.
   - **État** : `[DONE]`, `[WIP]`, etc. (majuscules)
+- ✅ **Colonnes de journal à remplir à la main** (préservées d'un lancement à l'autre) :
+  `Activités planifiées`, `Aide extérieure`, `Imprévus / heures supplémentaires`,
+  `Succès`, `Échecs`, `Appréciation critique / réflexion`.
+- ✅ **Répartition par auteur** dans l'onglet *Tableau de bord* (tâches + temps par personne).
 - ✅ **Traduction automatique dans l'Excel** : les préfixes et mots techniques sont remplacés par leur équivalent métier (voir la section [Convention de commit](#-convention-de-commit) ci-dessous).
 - ✅ **Génération Excel (.xlsx)** *(si Python 3 + openpyxl)* :
   - onglet **Journal** : regroupé par jour + total du jour
   - onglet **Tableau de bord** : totaux + graphiques (charge/jour, cumul)
   - si le fichier Excel est ouvert/verrouillé : sauvegarde automatique vers un nom alternatif
 - ✅ **Auto-install (optionnel)** : tente d'installer `git`, `awk`, `python` (selon l'OS) si manquants.
+
+---
+
+## 📓 Journal de travail (structure du CSV)
+
+Le CSV `Doc/journal_de_travail.csv` sert de source de vérité et couvre les exigences
+d'un journal de travail individuel :
+
+| # | Colonne | Rempli par | Contenu |
+| :-: | :--- | :--- | :--- |
+| 1 | `Date` | script | jour du commit (`dd/mm/yyyy`) |
+| 2 | `Auteur` | script | **qui a fait quoi** |
+| 3 | `Commit` | script | hash court → **commit référencé** |
+| 4 | `Type` | script | catégorie métier de la tâche |
+| 5 | `Description` | script | travail réalisé (sujet + corps) |
+| 6 | `Temps` | script | **durée** de la tâche |
+| 7 | `État` | script | **état** (`[DONE]`, `[WIP]`, `[REVIEW]`…) |
+| 8 | `Fichiers` | script | **fichiers / répertoires** concernés |
+| 9 | `Activités planifiées` | **à la main** | ce qui était prévu |
+| 10 | `Aide extérieure` | **à la main** | aide reçue |
+| 11 | `Imprévus / heures supplémentaires` | **à la main** | imprévus, heures en plus |
+| 12 | `Succès` | **à la main** | ce qui a marché |
+| 13 | `Échecs` | **à la main** | ce qui n'a pas marché |
+| 14 | `Appréciation critique / réflexion` | **à la main** | regard critique, réflexion personnelle |
+
+**Remplir les colonnes 9 à 14 :** édite directement le CSV (une ligne = une tâche).
+Le script ne réécrit jamais une ligne existante : tes notes sont conservées.
+Dans l'Excel, elles apparaissent sous forme de bloc *notes du jour* sous les tâches du jour.
+
+> ⚠️ L'onglet **Journal** de l'Excel est régénéré depuis le CSV à chaque lancement :
+> saisis tes notes dans le **CSV**, pas dans l'Excel.
+
+**Migration :** si le CSV a un ancien format, il est sauvegardé en
+`journal_de_travail.csv.bak_<date>` puis reconstruit depuis Git (auteur, commit et
+fichiers sont ainsi récupérés pour tout l'historique).
 
 ---
 
@@ -197,7 +234,10 @@ En plus du préfixe, certains mots courants dans la description sont aussi tradu
 ### Prérequis
 - Un dépôt **Git** local (le script doit être exécuté dans un dossier contenant `.git`)
 - Sur Windows : **Git Bash** recommandé (le script est en bash)
-- Python 3 (optionnel, uniquement pour générer le `.xlsx`)
+- Python 3 + `openpyxl` (uniquement pour générer le `.xlsx`) :
+  ```bash
+  python3 -m pip install --user --break-system-packages openpyxl
+  ```
 
 ### Lancer le script (dans ce repo cloné)
 ```bash

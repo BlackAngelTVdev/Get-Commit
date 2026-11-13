@@ -1,20 +1,23 @@
-Date,Nom,Temps,État,Description,Type
-"18/03/2026","Initial commit","[?]","[?]",""
-"18/03/2026","Add script to extract Git logs and generate reports","[?]","[?]","This script extracts Git commit logs since a specified date and formats them into a CSV file. It also converts the CSV into an XLSX file, including charts for visual representation."
+Date,Auteur,Commit,Type,Description,Temps,État,Fichiers,Activités planifiées,Aide extérieure,Imprévus / heures supplémentaires,Succès,Échecs,Appréciation critique / réflexion
+"18/03/2026","Damien Rochat","e9cd1a72","Autre","Initial commit","[?]","[?]","README.md","","","","","",""
+"18/03/2026","Damien Rochat","200c4a34","Autre","Add script to extract Git logs and generate reports — This script extracts Git commit logs since a specified date and formats them into a CSV file. It also converts the CSV into an XLSX file, including charts for visual representation.","[?]","[?]","get_commit.sh","","","","","",""
 
-"19/03/2026","Update comment in get_commit.sh for clarity","[?]","[?]","Removed the note about overwriting the existing file in the header comment."
+"19/03/2026","Damien Rochat","05bb0aa6","Autre","Update comment in get_commit.sh for clarity — Removed the note about overwriting the existing file in the header comment.","[?]","[?]","get_commit.sh","","","","","",""
 
-"25/03/2026","Feat(Manualle): possible d'ajout a la main","[5]","[DONE]",""
-"25/03/2026","Fix(manual)","[?]","[?]",""
+"25/03/2026","Damien Rochat","1db1357e","Fonctionnalité (Manualle)","possible d'ajout a la main","[5]","[DONE]","get_commit.sh","","","","","",""
+"25/03/2026","Damien Rochat","b2c94404","Autre","Fix(manual)","[?]","[?]","Doc/journal_de_travail.csv ; Doc/journal_de_travail.xlsx ; get_commit.sh","","","","","",""
 
-"04/05/2026","Update get_commit.sh","[?]","[?]",""
-"04/05/2026","Fix(readme)","[?]","[?]",""
-"04/05/2026","Feat(contriubut)","[?]","[?]",""
+"04/05/2026","Damien Rochat","08af37ba","Autre","Update get_commit.sh","[?]","[?]","get_commit.sh","","","","","",""
+"04/05/2026","Damien Rochat","6a018819","Autre","Fix(readme)","[?]","[?]","Doc/journal_de_travail.csv ; Doc/journal_de_travail.xlsx ; LICENSE ; README.md","","","","","",""
+"04/05/2026","Damien Rochat","1d5b4d03","Autre","Feat(contriubut)","[?]","[?]","README.md","","","","","",""
+"04/05/2026","Damien Rochat","a40a8c13","Autre","Fix(readme)","[?]","[?]","README.md","","","","","",""
 
-"11/05/2026","Update get_commit.sh","[?]","[?]",""
-"11/05/2026","Update README.md","[?]","[?]",""
+"11/05/2026","Damien Rochat","8d1009c8","Autre","Update get_commit.sh","[?]","[?]","get_commit.sh","","","","","",""
+"11/05/2026","Damien Rochat","f526efa2","Autre","Update README.md","[?]","[?]","README.md","","","","","",""
 
-"13/05/2026","Update README.md","[?]","[?]",""
-"13/05/2026","feat: remote script","[10]","[DONE]",""
-"13/05/2026","Merge branch 'main' of https://github.com/BlackAngelTVdev/Get-Commit","[?]","[?]",""
-"13/05/2026","feat: excel","[50]","[DONE]","Perfect excel"
+"13/05/2026","Damien Rochat","aea46722","Autre","Update README.md","[?]","[?]","README.md","","","","","",""
+"13/05/2026","Damien Rochat","affe301b","Fonctionnalité","remote script","[10]","[DONE]","Doc/journal_de_travail.csv ; Doc/journal_de_travail.xlsx ; main_commit.sh","","","","","",""
+"13/05/2026","Damien Rochat","77876ef8","Autre","Merge branch 'main' of https://github.com/BlackAngelTVdev/Get-Commit","[?]","[?]","","","","","","",""
+"13/05/2026","Damien Rochat","159dbe87","Fonctionnalité","excel — Perfect excel","[50]","[DONE]","get_commit.sh","","","","","",""
+
+"20/05/2026","Damien Rochat","79957cfc","Correction (python)","Colonne name","[25]","[DONE]","Doc/journal_de_travail.csv ; Doc/journal_de_travail.xlsx ; get_commit.sh","","","","","",""
